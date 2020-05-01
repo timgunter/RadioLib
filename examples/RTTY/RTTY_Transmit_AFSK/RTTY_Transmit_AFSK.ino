@@ -1,18 +1,15 @@
 /*
-   RadioLib Morse Transmit Example
+   RadioLib RTTY Transmit AFSK Example
 
-   This example sends Morse code message using
-   SX1278's FSK modem.
+   This example sends RTTY message using SX1278's
+   FSK modem. The data is modulated as AFSK.
 
-   Other modules that can be used for Morse Code:
+   Other modules that can be used for RTTY:
     - SX127x/RFM9x
     - RF69
     - SX1231
     - CC1101
-    - SX126x
-    - nRF24
     - Si443x/RFM2x
-    - SX128x
 
    For full API reference, see the GitHub Pages
    https://jgromes.github.io/RadioLib/
@@ -32,8 +29,12 @@ SX1278 fsk = new Module(10, 2, 9, 3);
 // https://github.com/jgromes/RadioShield
 //SX1278 fsk = RadioShield.ModuleA;
 
-// create Morse client instance using the FSK module
-MorseClient morse(&fsk);
+// create AFSK client instance using the FSK module
+// pin 5 is connected to SX1278 DIO2
+AFSKClient audio(&fsk, 5);
+
+// create RTTY client instance using the AFSK instance
+RTTYClient rtty(&audio);
 
 void setup() {
   Serial.begin(9600);
@@ -46,10 +47,9 @@ void setup() {
   // Rx bandwidth:                125.0 kHz
   // output power:                13 dBm
   // current limit:               100 mA
-  // sync word:                   0x2D  0x01
   int state = fsk.beginFSK();
-  
-  // when using one of the non-LoRa modules for Morse code
+
+  // when using one of the non-LoRa modules for RTTY
   // (RF69, CC1101, Si4432 etc.), use the basic begin() method
   // int state = fsk.begin();
 
@@ -61,11 +61,16 @@ void setup() {
     while(true);
   }
 
-  // initialize Morse client
-  Serial.print(F("[Morse] Initializing ... "));
-  // base frequency:              434.0 MHz
-  // speed:                       20 words per minute
-  state = morse.begin(434.0);
+  // initialize RTTY client
+  // NOTE: Unlike FSK RTTY, AFSK requires no rounding of
+  //       the frequency shift.
+  Serial.print(F("[RTTY] Initializing ... "));
+  // space frequency:             400 Hz
+  // frequency shift:             170 Hz
+  // baud rate:                   45 baud
+  // encoding:                    ASCII (7-bit)
+  // stop bits:                   1
+  state = rtty.begin(400, 170, 45);
   if(state == ERR_NONE) {
     Serial.println(F("success!"));
   } else {
@@ -73,46 +78,53 @@ void setup() {
     Serial.println(state);
     while(true);
   }
+
+  /*
+    // RadioLib also provides ITA2 ("Baudot") support
+    rtty.begin(400, 170, 45, ITA2);
+
+    // All transmissions in loop() (strings and numbers)
+    // will now be encoded using ITA2 code
+
+    // ASCII characters that do not have ITA2 equivalent
+    // will be sent as NUL (including lower case letters!)
+  */
 }
 
 void loop() {
-  Serial.print(F("[Morse] Sending Morse data ... "));
+  Serial.print(F("[RTTY] Sending RTTY data ... "));
 
-  // MorseClient supports all methods of the Serial class
-  // NOTE: Characters that do not have ITU-R M.1677-1
-  //       representation will not be sent! Lower case
-  //       letters will be capitalized.
+  // send out idle condition for 500 ms
+  rtty.idle();
+  delay(500);
 
-  // send start signal first
-  morse.startSignal();
+  // RTTYClient supports all methods of the Serial class
 
   // Arduino String class
   String aStr = "Arduino String";
-  morse.print(aStr);
+  rtty.println(aStr);
 
   // character array (C-String)
-  morse.print("C-String");
+  rtty.println("C-String");
 
   // string saved in flash
-  morse.print(F("Flash String"));
+  rtty.println(F("Flash String"));
 
   // character
-  morse.print('c');
+  rtty.println('c');
 
   // byte
   // formatting DEC/HEX/OCT/BIN is supported for
   // any integer type (byte/int/long)
-  morse.print(255, HEX);
+  rtty.println(255, HEX);
 
   // integer number
   int i = 1000;
-  morse.print(i);
+  rtty.println(i);
 
   // floating point number
-  // NOTE: When using println(), the transmission will be
-  //       terminated with end-of-work signal (...-.-).
   float f = -3.1415;
-  morse.println(f, 3);
+  rtty.println(f, 3);
 
   Serial.println(F("done!"));
 

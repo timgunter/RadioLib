@@ -18,7 +18,6 @@ env:
     - BOARD="SparkFun:apollo3:amap3redboard"
     - BOARD="arduino:mbed:nano33ble"
     - BOARD="stm32duino:STM32F1:mapleMini:bootloader_version=original,cpu_speed=speed_72mhz"
-    #- BOARD="stm32duino:STM32F4:discovery_f407"
 
 addons:
   apt:
@@ -105,11 +104,6 @@ before_install:
       export BUILD_EXAMPLES=false;
       arduino --pref "boardsmanager.additional.urls=http://dan.drown.org/stm32duino/package_STM32duino_index.json" --save-prefs 2>&1;
       arduino --install-boards stm32duino:STM32F1;
-
-    elif [[ "$BOARD" =~ "stm32duino:STM32F4:" ]]; then
-      export BUILD_EXAMPLES=false;
-      arduino --pref "boardsmanager.additional.urls=http://dan.drown.org/stm32duino/package_STM32duino_index.json" --save-prefs 2>&1;
-      arduino --install-boards stm32duino:STM32F4;
 
     fi
 

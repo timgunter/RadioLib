@@ -13,6 +13,9 @@
     - nRF24
     - Si443x/RFM2x
     - SX128x
+
+   For full API reference, see the GitHub Pages
+   https://jgromes.github.io/RadioLib/
 */
 
 // include the library

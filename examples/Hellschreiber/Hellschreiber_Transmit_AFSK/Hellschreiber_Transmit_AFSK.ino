@@ -1,18 +1,17 @@
 /*
-   RadioLib Morse Transmit Example
+   RadioLib Hellschreiber Transmit AFSK Example
 
-   This example sends Morse code message using
-   SX1278's FSK modem.
+   This example sends Hellschreiber message using
+   SX1278's FSK modem. The data is modulated
+   as AFSK.
 
-   Other modules that can be used for Morse Code:
+   Other modules that can be used for Hellschreiber
+   with AFSK modulation:
     - SX127x/RFM9x
     - RF69
     - SX1231
     - CC1101
-    - SX126x
-    - nRF24
     - Si443x/RFM2x
-    - SX128x
 
    For full API reference, see the GitHub Pages
    https://jgromes.github.io/RadioLib/
@@ -32,8 +31,12 @@ SX1278 fsk = new Module(10, 2, 9, 3);
 // https://github.com/jgromes/RadioShield
 //SX1278 fsk = RadioShield.ModuleA;
 
-// create Morse client instance using the FSK module
-MorseClient morse(&fsk);
+// create AFSK client instance using the FSK module
+// pin 5 is connected to SX1278 DIO2
+AFSKClient audio(&fsk, 5);
+
+// create Hellschreiber client instance using the AFSK instance
+HellClient hell(&audio);
 
 void setup() {
   Serial.begin(9600);
@@ -46,9 +49,8 @@ void setup() {
   // Rx bandwidth:                125.0 kHz
   // output power:                13 dBm
   // current limit:               100 mA
-  // sync word:                   0x2D  0x01
   int state = fsk.beginFSK();
-  
+
   // when using one of the non-LoRa modules for Morse code
   // (RF69, CC1101, Si4432 etc.), use the basic begin() method
   // int state = fsk.begin();
@@ -61,11 +63,11 @@ void setup() {
     while(true);
   }
 
-  // initialize Morse client
-  Serial.print(F("[Morse] Initializing ... "));
-  // base frequency:              434.0 MHz
-  // speed:                       20 words per minute
-  state = morse.begin(434.0);
+  // initialize Hellschreiber client
+  Serial.print(F("[Hell] Initializing ... "));
+  // AFSK tone frequency:         400 Hz
+  // speed:                       122.5 Baud ("Feld Hell")
+  state = hell.begin(400);
   if(state == ERR_NONE) {
     Serial.println(F("success!"));
   } else {
@@ -76,43 +78,42 @@ void setup() {
 }
 
 void loop() {
-  Serial.print(F("[Morse] Sending Morse data ... "));
+  Serial.print(F("[Hell] Sending Hellschreiber data ... "));
 
-  // MorseClient supports all methods of the Serial class
-  // NOTE: Characters that do not have ITU-R M.1677-1
-  //       representation will not be sent! Lower case
-  //       letters will be capitalized.
-
-  // send start signal first
-  morse.startSignal();
+  // HellClient supports all methods of the Serial class
+  // NOTE: Lower case letter will be capitalized.
 
   // Arduino String class
   String aStr = "Arduino String";
-  morse.print(aStr);
+  hell.print(aStr);
 
   // character array (C-String)
-  morse.print("C-String");
+  hell.print("C-String");
 
   // string saved in flash
-  morse.print(F("Flash String"));
+  hell.print(F("Flash String"));
 
   // character
-  morse.print('c');
+  hell.print('c');
 
   // byte
   // formatting DEC/HEX/OCT/BIN is supported for
   // any integer type (byte/int/long)
-  morse.print(255, HEX);
+  hell.print(255, HEX);
 
   // integer number
   int i = 1000;
-  morse.print(i);
+  hell.print(i);
 
   // floating point number
-  // NOTE: When using println(), the transmission will be
-  //       terminated with end-of-work signal (...-.-).
+  // NOTE: println() has no effect on the transmission,
+  //       and is only kept for compatibility reasons.
   float f = -3.1415;
-  morse.println(f, 3);
+  hell.println(f, 3);
+
+  // custom glyph - must be a 7 byte array of rows 7 pixels long 
+  uint8_t customGlyph[] = { 0b0000000, 0b0010100, 0b0010100, 0b0000000, 0b0100010, 0b0011100, 0b0000000 };
+  hell.printGlyph(customGlyph);
 
   Serial.println(F("done!"));
 
