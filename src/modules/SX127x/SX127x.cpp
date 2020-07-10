@@ -376,6 +376,11 @@ void SX127x::setDio0Action(void (*func)(void)) {
   attachInterrupt(digitalPinToInterrupt(_mod->getIrq()), func, RISING);
 }
 
+// Only needed on ESP32 targets. FIXME - move someplace better
+#ifndef IRAM_ATTR
+#define IRAM_ATTR
+#endif
+
 void IRAM_ATTR SX127x::clearDio0Action()
 {
     detachInterrupt(digitalPinToInterrupt(_mod->getIrq()));
