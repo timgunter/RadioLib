@@ -7,6 +7,8 @@
 #include <sys/types.h>
 
 #include <array>
+#include <memory>
+#include <string>
 #include <sstream>
 
 #include "../../TypeDef.h"
