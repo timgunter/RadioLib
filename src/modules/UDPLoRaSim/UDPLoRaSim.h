@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -7,6 +8,8 @@
 
 #include <array>
 #include <sstream>
+
+#include "../../TypeDef.h"
 
 // Cuz 0 is a valid socket(ugh)
 class SockHandle
@@ -42,7 +45,8 @@ struct SockDeleter
     void operator()(pointer &p) { close(p); p = pointer(); }
 }; // class SockDeleter
 
-using SockPtr = std::unique_ptr<int, SockDeleter>;
+//using SockPtr = std::unique_ptr<int, SockDeleter>;
+using SockPtr = std::shared_ptr<int, SockDeleter>; // Shared so we can use same socket for rx/tx
 
 class IP
 {
@@ -148,9 +152,9 @@ public:
         }
 
         //{ // Scope for sockaddr_in
-        //    sockaddr_in groupSock = {};
-        //    groupSock.sin_family  = AF_INET;
-        //    groupSock.sin_port    = port();
+        //    sockaddr_in groupSock     = {};
+        //    groupSock.sin_family      = AF_INET;
+        //    groupSock.sin_port        = port();
         //    groupSock.sin_addr.s_addr = multicast();
         //}
 
@@ -162,7 +166,8 @@ public:
         if(isOpen()) return true;
 
         m_rxSocket = openRx(m_rxSocket, m_port, m_multicast, m_interface);
-        m_txSocket = openTx(m_txSocket, m_port, m_multicast, m_interface);
+        m_txSocket = openTx(m_rxSocket, m_port, m_multicast, m_interface); // Use same socket for both
+        //m_txSocket = openTx(m_txSocket, m_port, m_multicast, m_interface);
 
         if(!m_txSocket || !m_rxSocket) { close(); return false; }
 
@@ -178,45 +183,68 @@ public:
     // blocking
     int16_t transmit(uint8_t* data, size_t len, uint8_t addr = 0) override
     {
-        int16_t const state = startTransmit(data, len, addr);
+        return startTransmit(data, len, addr);
+        //int16_t const state = startTransmit(data, len, addr);
 
-        while(true)
-        {
-            yield();
-        }
+        //while(true)
+        //{
+        //    yield();
+        //}
 
-        return standby();
+        //return standby();
     } // transmit
 
     // blocking
     int16_t receive(uint8_t* data, size_t len) override
     {
-        uint8_t const mode  = 0;
-        int16_t const state = startReceive(len, mode);
-
-        // Wait for packet or timeout
-        while(true)
-        {
-            yield();
-        }
-
         return readData(data, len);
+
+        //int16_t const state = startReceive(len, mode);
+        //uint8_t const mode  = 0;
+        //int16_t const state = startReceive(len, mode);
+
+        //// Wait for packet or timeout
+        //while(true)
+        //{
+        //    yield();
+        //}
+
+        //return readData(data, len);
     }
 
     // non-blocking
     int16_t startTransmit(uint8_t* data, size_t len, uint8_t addr = 0) override
     {
+        open(); // If already open, will return immediately
+
+        { // Scope for sockaddr_in
+            sockaddr_in groupSock     = {};
+            groupSock.sin_family      = AF_INET;
+            groupSock.sin_port        = m_port();
+            groupSock.sin_addr.s_addr = m_multicast();
+        }
+
+        if(0 > sendto(m_txSocket.get(), data, len, 0, static_cast<sockaddr *>(&group), sizeof(group)))
+            return ERR_UNKNOWN; // TODO: better error reporting
+
         return ERR_NONE;
     }
 
     int16_t readData(uint8_t* data, size_t len) override
     {
+        m_rxCurr = read(m_rxSocket.get(), data, len);
+        if(0 > m_rxCurr); return ERR_UNKNOWN; // TODO: better error reporting
+
         return ERR_NONE;
     }
 
     size_t getPacketLength(bool update = true) override
     {
-        return something;
+        if(update) { m_rxPrev = m_rxCurr; }
+
+        if(0 > m_rxCurr) return 0; // TODO: Is this correct?
+
+        return m_rxCurr;
     }
 
     /// I don't think I need to implement anything for these?
@@ -234,4 +262,7 @@ private:
 
     SockPtr  m_rxSocket;
     SockPtr  m_txSocket;
+
+    ssize_t  m_rxCurr = -1;
+    ssize_t  m_rxPrev = -1;
 }; // class UDPLoRaSim
