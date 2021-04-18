@@ -167,7 +167,7 @@ public:
 
         m_rxSocket = openRx(m_rxSocket, m_port, m_multicast, m_interface);
         m_txSocket = openTx(m_rxSocket, m_port, m_multicast, m_interface); // Use same socket for both
-        //m_txSocket = openTx(m_txSocket, m_port, m_multicast, m_interface);
+        //m_txSocket = openTx(m_txSocket, m_port, m_multicast, m_interface); // Not sure if this will work, may need separate sockets
 
         if(!m_txSocket || !m_rxSocket) { close(); return false; }
 
@@ -222,10 +222,10 @@ public:
             groupSock.sin_family      = AF_INET;
             groupSock.sin_port        = m_port();
             groupSock.sin_addr.s_addr = m_multicast();
-        }
 
-        if(0 > sendto(m_txSocket.get(), data, len, 0, static_cast<sockaddr *>(&group), sizeof(group)))
-            return ERR_UNKNOWN; // TODO: better error reporting
+            if(0 > sendto(m_txSocket.get(), data, len, 0, static_cast<sockaddr *>(&group), sizeof(group)))
+                return ERR_UNKNOWN; // TODO: better error reporting
+        }
 
         return ERR_NONE;
     }
@@ -244,7 +244,7 @@ public:
 
         if(0 > m_rxCurr) return 0; // TODO: Is this correct?
 
-        return m_rxCurr;
+        return static_cast<size_t>(m_rxCurr);
     }
 
     /// I don't think I need to implement anything for these?
