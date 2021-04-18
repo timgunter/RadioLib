@@ -83,6 +83,27 @@ struct Port
     uint16_t const m_port;
 }
 
+struct TxGroup
+{
+public:
+    TxGroup(Port const &port = Port(), IPMulti const &multicast = IPMulti()) { init(port, multicast); }
+
+    void init(Port const &port = Port(), IPMulti const &multicast = IPMulti())
+    {
+        m_txGroup = {};
+        m_txGroup.sin_family      = AF_INET;
+        m_txGroup.sin_port        = port();
+        m_txGroup.sin_addr.s_addr = multicast();
+    }
+
+    operator  sockaddr*(     ) const { return static_cast<sockaddr *>(&m_txGroup); }
+    sockaddr *operator()(void) const { return static_cast<sockaddr *>(*this     ); }
+    size_t    size(      void) const { return sizeof(m_txGroup); }
+
+private:
+    ip_mreq m_txGroup;
+}; // struct TxGroup
+
 class UDPLoRaSim : public PhysicalLayer
 {
 public:
@@ -140,23 +161,14 @@ public:
         return sock;
     } // openRx()
 
-    static SockPtr openTx(SockPtr sock, Port const &port, IPMulti const &multicast = IPMulti(), IPIFace const &interface = IPIFace())
+    static SockPtr openTx(SockPtr sock, Port const &port, IPIFace const &interface = IPIFace())
     {
         if(!sock) sock.reset(socket(AF_INET_SOCK_DGRAM, 0));
 
-        { // Scope for in_addr
-            in_addr iface = {};
-            iface.s_addr  = interface();
-            if(0 > setsockopt(sock.get(), IPPROTO_IP, IP_MULTICAST_IF, reinterpret_cast<char *>(&iface), sizeof(iface)))
-                return SockPtr();
-        }
-
-        //{ // Scope for sockaddr_in
-        //    sockaddr_in groupSock     = {};
-        //    groupSock.sin_family      = AF_INET;
-        //    groupSock.sin_port        = port();
-        //    groupSock.sin_addr.s_addr = multicast();
-        //}
+        in_addr iface = {};
+        iface.s_addr  = interface();
+        if(0 > setsockopt(sock.get(), IPPROTO_IP, IP_MULTICAST_IF, reinterpret_cast<char *>(&iface), sizeof(iface)))
+            return SockPtr();
 
         return sock;
     } // openTx()
@@ -166,8 +178,10 @@ public:
         if(isOpen()) return true;
 
         m_rxSocket = openRx(m_rxSocket, m_port, m_multicast, m_interface);
-        m_txSocket = openTx(m_rxSocket, m_port, m_multicast, m_interface); // Use same socket for both
-        //m_txSocket = openTx(m_txSocket, m_port, m_multicast, m_interface); // Not sure if this will work, may need separate sockets
+        m_txSocket = openTx(m_rxSocket, m_port,              m_interface); // Use same socket for both
+        //m_txSocket = openTx(m_txSocket, m_port,              m_interface); // Not sure if this will work, may need separate sockets
+
+        m_txGroup.init(m_port, m_multicast);
 
         if(!m_txSocket || !m_rxSocket) { close(); return false; }
 
@@ -178,6 +192,9 @@ public:
     {
         m_rxSocket.reset();
         m_txSocket.reset();
+        m_txGroup.init();
+        m_rxCurr = -1;
+        m_rxPrev = -1;
     } // close()
 
     // blocking
@@ -217,15 +234,8 @@ public:
     {
         open(); // If already open, will return immediately
 
-        { // Scope for sockaddr_in
-            sockaddr_in groupSock     = {};
-            groupSock.sin_family      = AF_INET;
-            groupSock.sin_port        = m_port();
-            groupSock.sin_addr.s_addr = m_multicast();
-
-            if(0 > sendto(m_txSocket.get(), data, len, 0, static_cast<sockaddr *>(&group), sizeof(group)))
-                return ERR_UNKNOWN; // TODO: better error reporting
-        }
+        if(0 > sendto(m_txSocket.get(), data, len, 0, m_txGroup(), m_txGroup.size()))
+            return ERR_UNKNOWN; // TODO: better error reporting
 
         return ERR_NONE;
     }
@@ -263,6 +273,7 @@ private:
     SockPtr  m_rxSocket;
     SockPtr  m_txSocket;
 
-    ssize_t  m_rxCurr = -1;
-    ssize_t  m_rxPrev = -1;
+    TxGroup  m_txGroup;
+    ssize_t  m_rxCurr  = -1;
+    ssize_t  m_rxPrev  = -1;
 }; // class UDPLoRaSim
