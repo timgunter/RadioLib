@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/udp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -59,9 +60,9 @@ void TxGroup::init(Port const &port, IPMulti const &multicast)
     m_txGroup.sin_addr.s_addr = multicast();
 }
 
-TxGroup::operator  sockaddr*(     ) const { return static_cast<sockaddr *>(&m_txGroup); }
-sockaddr *TxGroup::operator()(void) const { return static_cast<sockaddr *>(*this     ); }
-size_t    TxGroup::size(      void) const { return sizeof(m_txGroup); }
+TxGroup::operator sockaddr const*(      ) const { return reinterpret_cast<sockaddr const *>(&m_txGroup); }
+sockaddr const *TxGroup::operator()(void) const { return static_cast<     sockaddr const *>(*this     ); }
+size_t          TxGroup::size(      void) const { return sizeof(m_txGroup); }
 
 UDPLoRaSim::UDPLoRaSim(
     Port      const &port
@@ -80,15 +81,15 @@ UDPLoRaSim::~UDPLoRaSim(void) {}
 
 bool UDPLoRaSim::isOpen(void) const { return m_rxSocket && m_txSocket; }
 
-SockPtr UDPLoRaSim::openRx(SockPtr sock, Port const &port, IPMulti const &multicast, IPIFace const &interface)
+bool UDPLoRaSim::openRx(SockPtr &sock, Port const &port, IPMulti const &multicast, IPIFace const &interface)
 {
-    if(!sock) sock.reset(socket(AF_INET_SOCK_DGRAM, 0), SockDeleter());
+    if(!sock) sock.reset(socket(AF_INET, SOCK_DGRAM, 0));
 
-    if(!sock) return SockPtr();
+    if(!sock) return false;
 
     int reuse = 1;
     if(0 > setsockopt(sock.get(), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char *>(&reuse), sizeof(reuse)))
-        return SockPtr();
+        return false;
 
     { // Scope for sockaddr_in
         sockaddr_in saddr     = {};
@@ -97,7 +98,7 @@ SockPtr UDPLoRaSim::openRx(SockPtr sock, Port const &port, IPMulti const &multic
         saddr.sin_addr.s_addr = INADDR_ANY;
 
         if(0 > bind(sock.get(), reinterpret_cast<sockaddr *>(&saddr), sizeof(saddr)))
-            return SockPtr();
+            return false;
     }
 
     { // Scope for ip_mreq
@@ -105,31 +106,30 @@ SockPtr UDPLoRaSim::openRx(SockPtr sock, Port const &port, IPMulti const &multic
         group.imr_multiaddr.s_addr = multicast();
         group.imr_interface.s_addr = interface();
         if(0 > setsockopt(sock.get(), IPPROTO_IP, IP_ADD_MEMBERSHIP, reinterpret_cast<char *>(&group), sizeof(group)))
-            return SockPtr();
+            return false;
     }
 
-    return sock;
+    return true;
 } // openRx()
 
-SockPtr UDPLoRaSim::openTx(SockPtr sock, Port const &port, IPIFace const &interface)
+bool UDPLoRaSim::openTx(SockPtr &sock, Port const &port, IPIFace const &interface)
 {
-    if(!sock) sock.reset(socket(AF_INET_SOCK_DGRAM, 0), SockDeleter());
+    if(!sock) sock.reset(socket(AF_INET, SOCK_DGRAM, 0));
 
     in_addr iface = {};
     iface.s_addr  = interface();
     if(0 > setsockopt(sock.get(), IPPROTO_IP, IP_MULTICAST_IF, reinterpret_cast<char *>(&iface), sizeof(iface)))
-        return SockPtr();
+        return false;
 
-    return sock;
+    return true;
 } // openTx()
 
 bool UDPLoRaSim::open(void)
 {
     if(isOpen()) return true;
 
-    m_rxSocket = openRx(m_rxSocket, m_port, m_multicast, m_interface);
-    m_txSocket = openTx(m_rxSocket, m_port,              m_interface); // Use same socket for both
-    //m_txSocket = openTx(m_txSocket, m_port,              m_interface); // Not sure if this will work, may need separate sockets
+    openRx(m_rxSocket, m_port, m_multicast, m_interface);
+    openTx(m_txSocket, m_port,              m_interface);
 
     m_txGroup.init(m_port, m_multicast);
 
@@ -148,7 +148,7 @@ void UDPLoRaSim::close(void)
 } // close()
 
 // blocking
-int16_t UDPLoRaSim::transmit(uint8_t* data, size_t len, uint8_t addr = 0) override
+int16_t UDPLoRaSim::transmit(uint8_t* data, size_t len, uint8_t addr)
 {
     return startTransmit(data, len, addr);
     //int16_t const state = startTransmit(data, len, addr);
@@ -162,7 +162,7 @@ int16_t UDPLoRaSim::transmit(uint8_t* data, size_t len, uint8_t addr = 0) overri
 } // transmit
 
 // blocking
-int16_t UDPLoRaSim::receive(uint8_t* data, size_t len) override
+int16_t UDPLoRaSim::receive(uint8_t* data, size_t len)
 {
     return readData(data, len);
 
@@ -180,7 +180,7 @@ int16_t UDPLoRaSim::receive(uint8_t* data, size_t len) override
 }
 
 // non-blocking
-int16_t UDPLoRaSim::startTransmit(uint8_t* data, size_t len, uint8_t addr = 0) override
+int16_t UDPLoRaSim::startTransmit(uint8_t* data, size_t len, uint8_t addr)
 {
     open(); // If already open, will return immediately
 
@@ -190,15 +190,17 @@ int16_t UDPLoRaSim::startTransmit(uint8_t* data, size_t len, uint8_t addr = 0) o
     return ERR_NONE;
 }
 
-int16_t UDPLoRaSim::readData(uint8_t* data, size_t len) override
+int16_t UDPLoRaSim::readData(uint8_t* data, size_t len)
 {
+    open(); // If already open, will return immediately
+
     m_rxCurr = read(m_rxSocket.get(), data, len);
     if(0 > m_rxCurr); return ERR_UNKNOWN; // TODO: better error reporting
 
     return ERR_NONE;
 }
 
-size_t UDPLoRaSim::getPacketLength(bool update = true) override
+size_t UDPLoRaSim::getPacketLength(bool update)
 {
     if(update) { m_rxPrev = m_rxCurr; }
 
@@ -208,12 +210,12 @@ size_t UDPLoRaSim::getPacketLength(bool update = true) override
 }
 
 /// I don't think I need to implement anything for these?
-int16_t UDPLoRaSim::standby(                               ) override { return ERR_NONE; }
-int16_t UDPLoRaSim::transmitDirect(       uint32_t FRF = 0 ) override { return ERR_NONE; }
-int16_t UDPLoRaSim::receiveDirect(                         ) override { return ERR_NONE; }
-int16_t UDPLoRaSim::setFrequencyDeviation(float    freqDev ) override { return ERR_NONE; }
-int16_t UDPLoRaSim::setDataShaping(       float    sh      ) override { return ERR_NONE; }
-int16_t UDPLoRaSim::setEncoding(          uint8_t  encoding) override { return ERR_NONE; }
+int16_t UDPLoRaSim::standby(                               ) { return ERR_NONE; }
+int16_t UDPLoRaSim::transmitDirect(       uint32_t FRF     ) { return ERR_NONE; }
+int16_t UDPLoRaSim::receiveDirect(                         ) { return ERR_NONE; }
+int16_t UDPLoRaSim::setFrequencyDeviation(float    freqDev ) { return ERR_NONE; }
+int16_t UDPLoRaSim::setDataShaping(       float    sh      ) { return ERR_NONE; }
+int16_t UDPLoRaSim::setEncoding(          uint8_t  encoding) { return ERR_NONE; }
 
 //#ifdef OLD_STR
 //#define str OLD_STR

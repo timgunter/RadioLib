@@ -32,9 +32,9 @@ public:
     SockHandle(int            const sock     ) : m_sock(sock) {}
     SockHandle(std::nullptr_t const = nullptr) : m_sock(nullsock  ) {}
 
-    operator bool() const { return m_sock != nullsock; }
-    operator int&()       { return m_sock; }
-    operator int () const { return m_sock; }
+    explicit operator bool() const { return m_sock != nullsock; }
+    operator int       &(  )       { return m_sock; }
+    operator int const &(  ) const { return m_sock; }
 
     int       *operator&()       { return &m_sock; }
     int const *operator&() const { return &m_sock; }
@@ -54,12 +54,12 @@ private:
 struct SockDeleter
 {
     using pointer = SockHandle;
-    void operator()(pointer &p) { close(p); p = pointer(); }
+    void operator()(pointer p) { close(p); }
 }; // class SockDeleter
 
-//using SockPtr = std::unique_ptr<int, SockDeleter>;
+using SockPtr = std::unique_ptr<int, SockDeleter>;
 //using SockPtr = std::shared_ptr<int, SockDeleter>; // Shared so we can use same socket for rx/tx
-using SockPtr = std::shared_ptr<int>; // Shared so we can use same socket for rx/tx
+//using SockPtr = std::shared_ptr<int>; // Shared so we can use same socket for rx/tx
 
 class IP
 {
@@ -95,12 +95,12 @@ public:
 
     void init(Port const &port = Port(), IPMulti const &multicast = IPMulti());
 
-    operator  sockaddr*(     ) const;
-    sockaddr *operator()(void) const;
-    size_t    size(      void) const;
+    operator sockaddr const*(       ) const;
+    sockaddr  const *operator()(void) const;
+    size_t           size(      void) const;
 
 private:
-    ip_mreq m_txGroup;
+    sockaddr_in m_txGroup;
 }; // struct TxGroup
 
 class UDPLoRaSim : public PhysicalLayer
@@ -124,8 +124,8 @@ public:
 
     bool isOpen(void) const;
 
-    static SockPtr openRx(SockPtr sock, Port const &port, IPMulti const &multicast = IPMulti(), IPIFace const &interface = IPIFace());
-    static SockPtr openTx(SockPtr sock, Port const &port,                                       IPIFace const &interface = IPIFace());
+    static bool openRx(SockPtr &sock, Port const &port, IPMulti const &multicast = IPMulti(), IPIFace const &interface = IPIFace());
+    static bool openTx(SockPtr &sock, Port const &port,                                       IPIFace const &interface = IPIFace());
 
     bool open(void);
     
