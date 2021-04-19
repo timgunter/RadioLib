@@ -1,5 +1,3 @@
-#pragma once
-
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -16,19 +14,12 @@
 #include <string>
 #include <sstream>
 
-//#include "../../TypeDef.h"
-
 #include "UDPLoRaSim.h"
 
 #ifdef str
 #define OLD_STR str
 #undef str
 #endif // str
-
-#ifdef xstr
-#define OLD_XSTR xstr
-#undef xstr
-#endif // xstr
 
 IP::IP(ip const &ip_) : m_ip(ip_) {}
 
@@ -216,15 +207,3 @@ int16_t UDPLoRaSim::receiveDirect(                         ) { return ERR_NONE; 
 int16_t UDPLoRaSim::setFrequencyDeviation(float    freqDev ) { return ERR_NONE; }
 int16_t UDPLoRaSim::setDataShaping(       float    sh      ) { return ERR_NONE; }
 int16_t UDPLoRaSim::setEncoding(          uint8_t  encoding) { return ERR_NONE; }
-
-//#ifdef OLD_STR
-//#define str OLD_STR
-//#endif // OLD_STR
-//
-//#ifdef OLD_XSTR
-//#define str OLD_XSTR
-//#endif // OLD_XSTR
-//
-//#if defined(OLD_STR) || defined(OLD_XSTR)
-//#include "configuration.h"
-//#endif // if OLD_STR or OLD_XSTR

@@ -1,27 +1,12 @@
 #pragma once
 
-//#include <unistd.h>
-//#include <arpa/inet.h>
 #include <netinet/in.h>
-//#include <sys/socket.h>
-//#include <sys/types.h>
 
 #include <array>
 #include <memory>
 #include <string>
 
-//#include "../../TypeDef.h"
 #include "protocols/PhysicalLayer/PhysicalLayer.h"
-
-//#ifdef str
-//#define OLD_STR str
-//#undef str
-//#endif // str
-//
-//#ifdef xstr
-//#define OLD_XSTR xstr
-//#undef xstr
-//#endif // xstr
 
 // Cuz 0 is a valid socket(ugh)
 class SockHandle
@@ -58,8 +43,6 @@ struct SockDeleter
 }; // class SockDeleter
 
 using SockPtr = std::unique_ptr<int, SockDeleter>;
-//using SockPtr = std::shared_ptr<int, SockDeleter>; // Shared so we can use same socket for rx/tx
-//using SockPtr = std::shared_ptr<int>; // Shared so we can use same socket for rx/tx
 
 class IP
 {
@@ -161,15 +144,3 @@ private:
     ssize_t  m_rxCurr  = -1;
     ssize_t  m_rxPrev  = -1;
 }; // class UDPLoRaSim
-
-//#ifdef OLD_STR
-//#define str OLD_STR
-//#endif // OLD_STR
-//
-//#ifdef OLD_XSTR
-//#define str OLD_XSTR
-//#endif // OLD_XSTR
-//
-//#if defined(OLD_STR) || defined(OLD_XSTR)
-//#include "configuration.h"
-//#endif // if OLD_STR or OLD_XSTR
